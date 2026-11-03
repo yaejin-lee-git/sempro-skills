@@ -1,0 +1,13 @@
+{
+  "name": "sempro",
+  "owner": {
+    "name": "sempro"
+  },
+  "plugins": [
+    {
+      "name": "jageum",
+      "source": "./plugins/jageum",
+      "description": "지점별 자금수지보고 만들기 (위하고 분개장, 통장 잔액, 지난달 보고서 → 이번 달 보고서, 점검표, 비고, 통합). 첫 설정 인터뷰 포함"
+    }
+  ]
+}
