@@ -34,7 +34,7 @@ def load_bank(path):
     return rows('계좌잔액'), rows('통장거래_' + wb.sheetnames[0].split('_')[1])
 
 
-def main(tpl, bj_path, bank_path, year, month, out):
+def main(tpl, bj_path, bank_path, year, month, out, day=None):
     year, month = int(year), int(month); pm = 12 if month == 1 else month - 1
     ym = f'{year}{month:02d}'
     bj = [r for r in load_bj(bj_path) if str(r['일자']).startswith(ym)]
@@ -58,7 +58,7 @@ def main(tpl, bj_path, bank_path, year, month, out):
                     c.value = v
     for o, n in ren.items(): wb[o].title = n
     # 기준월: '(9월1일~9월30일)', '(9월 1일~9월 30일)', '(9월01일~9월30일)' 처럼 지점마다 다른 모양을 그대로 두고 숫자만
-    last = 31 if month in (1, 3, 5, 7, 8, 10, 12) else 30 if month != 2 else (29 if year % 4 == 0 else 28)
+    last = int(day) if day else (31 if month in (1, 3, 5, 7, 8, 10, 12) else 30 if month != 2 else (29 if year % 4 == 0 else 28))  # 기준일 (월 중간 '오늘자' 보고서면 그날)
     for row in top.iter_rows(max_row=3):
         for c in row:
             if isinstance(c.value, str) and re.match(r'\(\d+월\s*\d+일\s*~', c.value):

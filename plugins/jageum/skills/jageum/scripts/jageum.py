@@ -9,7 +9,7 @@
   jageum.py status                            # 저장된 설정 보기
 매달
   jageum.py where  --branch <지점> --ym 2026-10
-  jageum.py report --branch <지점> --ym 2026-10 [--raw <원자료 폴더>] [--force]
+  jageum.py report --branch <지점> --ym 2026-10 [--day 3] [--raw <원자료 폴더>] [--force]   # --day: 월 중간 '오늘자' 기준일
   jageum.py notes  --report <보고서.xlsx> --notes <비고.json>
   jageum.py total  --ym 2026-10
 
@@ -72,7 +72,7 @@ def branch_folder(cfg, name):
     sys.exit(f'지점을 모릅니다: {name} (가능: {", ".join(short(f) for f in cfg["지점폴더"])})')
 
 
-def find(cfg, bf, y, m, raw=None):
+def find(cfg, bf, y, m, raw=None, day=None):
     py, pm = (y - 1, 12) if m == 1 else (y, m - 1)
     rawd = raw or os.path.join(cfg['원자료폴더'] or '', str(y), f'{y}-{m:02d}_마감분', '자금수지', bf)
     fs = [f for f in glob.glob(os.path.join(rawd, '*.xlsx')) if not os.path.basename(f).startswith('~$')]
@@ -89,7 +89,7 @@ def find(cfg, bf, y, m, raw=None):
     if tpl:
         d = os.path.dirname(tpl)
         if py != y: d = os.path.join(os.path.dirname(d), N(os.path.basename(d)).replace(str(py), str(y)))  # 1월은 새 연도 폴더
-        n = re.sub(rf'(?<!\d){pm}월([ _]*)\d+일', lambda mm: f'{m}월{mm.group(1)}{last_day(y, m)}일', N(os.path.basename(tpl)))
+        n = re.sub(rf'(?<!\d){pm}월([ _]*)\d+일', lambda mm: f'{m}월{mm.group(1)}{day or last_day(y, m)}일', N(os.path.basename(tpl)))
         out = os.path.join(d, n)
     return {'원자료폴더': rawd, '분개장': bj[0] if len(bj) == 1 else bj, '통장거래': bk[0] if len(bk) == 1 else bk,
             '지난달보고서': tpl, '만들보고서': out, '이미있음': bool(out and os.path.exists(out))}
@@ -130,13 +130,13 @@ def cmd_config(a):
 
 
 def cmd_report(a):
-    cfg = load_cfg(); bf = branch_folder(cfg, a.branch); y, m = ym(a.ym); w = find(cfg, bf, y, m, a.raw)
+    cfg = load_cfg(); bf = branch_folder(cfg, a.branch); y, m = ym(a.ym); day = int(a.day) if a.day else None; w = find(cfg, bf, y, m, a.raw, day)
     miss = [k for k in ('분개장', '통장거래', '지난달보고서') if not isinstance(w[k], str)]
     if miss: out_json({'오류': '파일을 못 찾음', '없는것': miss, **w}); sys.exit(2)
     out = w['만들보고서']
     if w['이미있음'] and not a.force: out = out.replace('.xlsx', ' (셈프로).xlsx')  # 담당자 파일을 덮지 않음
     os.makedirs(os.path.dirname(out), exist_ok=True)
-    with contextlib.redirect_stdout(io.StringIO()): chk = make_report.main(w['지난달보고서'], w['분개장'], w['통장거래'], y, m, out)
+    with contextlib.redirect_stdout(io.StringIO()): chk = make_report.main(w['지난달보고서'], w['분개장'], w['통장거래'], y, m, out, day)
     dst = os.path.join(w['원자료폴더'], f'{short(bf)}_점검_{y}-{m:02d}.json')  # 점검표는 원자료 폴더에
     try: shutil.move(chk, dst)
     except OSError: dst = chk
@@ -166,7 +166,7 @@ def main():
     p = sp.add_parser('config'); p.add_argument('--nas', required=True); p.add_argument('--branches'); p.add_argument('--company')
     for n in ('where', 'report'):
         p = sp.add_parser(n); p.add_argument('--branch', required=True); p.add_argument('--ym', required=True)
-        p.add_argument('--raw'); p.add_argument('--force', action='store_true')
+        p.add_argument('--raw'); p.add_argument('--force', action='store_true'); p.add_argument('--day', help='월 중간 기준일 (예: 3 → 11월 3일 기준)')
     p = sp.add_parser('notes'); p.add_argument('--report', required=True); p.add_argument('--notes', required=True)
     p = sp.add_parser('total'); p.add_argument('--ym', required=True)
     a = ap.parse_args()
@@ -174,7 +174,7 @@ def main():
     elif a.c == 'check': cmd_check(a)
     elif a.c == 'config': cmd_config(a)
     elif a.c == 'status': out_json(load_cfg())
-    elif a.c == 'where': cfg = load_cfg(); out_json(find(cfg, branch_folder(cfg, a.branch), *ym(a.ym), a.raw))
+    elif a.c == 'where': cfg = load_cfg(); out_json(find(cfg, branch_folder(cfg, a.branch), *ym(a.ym), a.raw, int(a.day) if a.day else None))
     elif a.c == 'report': cmd_report(a)
     elif a.c == 'notes': write_notes.main(a.report, a.notes); print('비고 넣음', a.report)
     elif a.c == 'total': cmd_total(a)
