@@ -136,13 +136,13 @@ def cmd_report(a):
     out = w['만들보고서']
     if w['이미있음'] and not a.force: out = out.replace('.xlsx', ' (셈프로).xlsx')  # 담당자 파일을 덮지 않음
     os.makedirs(os.path.dirname(out), exist_ok=True)
-    with contextlib.redirect_stdout(io.StringIO()): chk = make_report.main(w['지난달보고서'], w['분개장'], w['통장거래'], y, m, out, day)
+    with contextlib.redirect_stdout(io.StringIO()): chk = make_report.main(w['지난달보고서'], w['분개장'], w['통장거래'], y, m, out, day, with_bank_only=bool(day))
     dst = os.path.join(w['원자료폴더'], f'{short(bf)}_점검_{y}-{m:02d}.json')  # 점검표는 원자료 폴더에
     try: shutil.move(chk, dst)
     except OSError: dst = chk
     d = json.load(open(dst, encoding='utf-8'))
     out_json({'보고서': out, '점검표': dst, '줄수': d['줄수'],
-              '확인할것': {k: d[k] for k in ('계좌', '프로젝트없음', '통장만', '양식에없는계좌', '양식계좌번호다름', '분류확인') if d.get(k)},
+              '확인할것': {k: d[k] for k in ('계좌', '프로젝트없음', '통장만', '전표처리전', '양식에없는계좌', '양식계좌번호다름', '분류확인') if d.get(k)},
               '분류합계': d['분류합계'], '지난달비고': d['지난달비고'], '분류별큰거래': d['분류별큰거래']})
 
 

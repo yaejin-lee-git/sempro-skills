@@ -34,7 +34,7 @@ def load_bank(path):
     return rows('계좌잔액'), rows('통장거래_' + wb.sheetnames[0].split('_')[1])
 
 
-def main(tpl, bj_path, bank_path, year, month, out, day=None):
+def main(tpl, bj_path, bank_path, year, month, out, day=None, with_bank_only=False):
     year, month = int(year), int(month); pm = 12 if month == 1 else month - 1
     ym = f'{year}{month:02d}'
     bj = [r for r in load_bj(bj_path) if str(r['일자']).startswith(ym)]
@@ -97,7 +97,7 @@ def main(tpl, bj_path, bank_path, year, month, out, day=None):
         if after_sub: other.add(c)  # MMF, 신탁: 보통예금 원장 대조에서 뺌
         vals = list(a.values()); start, bi, bo, end = vals[1], vals[2], vals[3], vals[4]  # 계좌, 지난달 말 잔액, 입금, 출금, 이번 달 말 잔액
         lines = [x for x in bj if str(x['거래처코드']) == c and x['계정과목'] == '보통예금']
-        i, o = (sum(x['차변금액'] or 0 for x in lines), sum(x['대변금액'] or 0 for x in lines)) if lines else (bi, bo)  # MMF, 신탁(기타단기금융상품)은 보통예금 원장에 없어서 통장 입출금을 따로 적고 합산 (담당자 확인 기준)
+        i, o = (sum(x['차변금액'] or 0 for x in lines), sum(x['대변금액'] or 0 for x in lines)) if lines and not with_bank_only else (bi, bo)  # 월 중간 보고서는 통장 기준(전표처리전 줄을 넣으므로). MMF, 신탁(기타단기금융상품)은 보통예금 원장에 없어서 통장 입출금을 따로 적고 합산 (담당자 확인 기준)
         for col, v in ((3, start), (4, i), (5, o), (7, end)):
             old = top.cell(r, col).value
             if is_f(old): continue  # 지점 양식이 SUMIFS 수식이면 그대로
@@ -142,6 +142,15 @@ def main(tpl, bj_path, bank_path, year, month, out, day=None):
     for r in range(4, sub.max_row + 1):
         for c in range(1, sub.max_column + 1): sub.cell(r, c).value = None
     rows = [x for x in bj if x['계정과목'] == '보통예금']
+    if with_bank_only:  # 월 중간 보고서: 그날 전표가 하나도 없는 통장 거래는 통장 적요 그대로, 분류 '전표처리전'으로 넣음
+        have = {(str(x['일자']), str(x['거래처코드'])) for x in rows}
+        for t in bank_tx:
+            c = code(t['계좌'])
+            if c not in used or c in other or (str(t['일자']), c) in have or not (t['입금'] or t['출금']): continue
+            nm = re.sub(r'^\(\d+\)|\[\d+\]$', '', t['계좌'])
+            rows.append({'일자': str(t['일자']), '전표번호': f'~{t["순번"]:08d}', '적요': t['적요(통장)'], '차변금액': t['입금'] or 0, '대변금액': t['출금'] or 0,
+                         '프로젝트': '전표처리전', '거래처': nm, '거래처코드': c, '계정과목': '보통예금'})
+            check.setdefault('전표처리전', []).append({'일자': str(t['일자']), '적요': t['적요(통장)'], '입금': t['입금'], '출금': t['출금']})
     # 담당자 순서: 날짜별로 입금 먼저, 그다음 출금, 각각 전표번호 순
     rows.sort(key=lambda x: (str(x['일자']), 0 if x['차변금액'] else 1, str(x['전표번호'])))
     for n, x in enumerate(rows):
